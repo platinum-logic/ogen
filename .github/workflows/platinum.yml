@@ -31,6 +31,10 @@ jobs:
       - name: Check generated fixtures
         if: matrix.lane == 'generation'
         run: |
+          # Checkout and this container run as different filesystem owners.
+          # Trust only this job's checkout, never all repositories.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git rev-parse --is-inside-work-tree
           go generate ./...
           git diff --exit-code
           test -z "$(git ls-files --others --exclude-standard)"
