@@ -1,5 +1,8 @@
 package integration
 
+//go:generate go run ../../cmd/ogen --clean --package constapi --target test_constant_fields ../../_testdata/positive/constant_fields.yaml
+//go:generate go run ../../cmd/ogen --clean --package unionapi --target test_disjoint_field_types ../../_testdata/positive/disjoint_field_types.yaml
+
 // Sample API matrix:
 //
 //go:generate go run ../../cmd/ogen -v --clean --config _config/sample_api.yml         --target sample_api         ../../_testdata/positive/sample.json

@@ -1,0 +1,40 @@
+openapi: 3.1.0
+info:
+  title: Constant decoder regression
+  version: 1.0.0
+paths:
+  /probe:
+    get:
+      operationId: getProbe
+      responses:
+        '200':
+          description: Constant-valued fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Probe'
+components:
+  schemas:
+    Probe:
+      type: object
+      additionalProperties: false
+      required: [state, code, ratio, enabled, empty]
+      properties:
+        state:
+          type: string
+          const: ready
+        code:
+          type: integer
+          const: 42
+        ratio:
+          type: number
+          const: 1.5
+        enabled:
+          type: boolean
+          const: true
+        empty:
+          type: 'null'
+          const: null
+        optional:
+          type: string
+          const: optional

@@ -1222,6 +1222,9 @@ func (g *schemaGen) oneOf(name string, schema *jsonschema.Schema, side bool) (*i
 	// If we have undiscriminable fields and no successful discriminator was found,
 	// we need to fail. But if at least one field can discriminate, we're okay.
 	if len(undiscriminableFields) > 0 && !hasSuccessfulDiscriminator {
+		if useCompleteFieldTypeDiscriminator(sum) {
+			return sum, nil
+		}
 		// Use the first undiscriminable field for the error message
 		f := undiscriminableFields[0]
 		return nil, errors.Wrapf(
@@ -1234,6 +1237,85 @@ func (g *schemaGen) oneOf(name string, schema *jsonschema.Schema, side bool) (*i
 	}
 
 	return sum, nil
+}
+
+// useCompleteFieldTypeDiscriminator finds one field whose JSON types distinguish
+// every variant. Other field signatures must not participate: different Go types
+// can have overlapping JSON representations and select the wrong variant.
+//
+// An omitted field is unambiguous only when at most one variant permits omission.
+// That variant becomes the default; its decoder still validates the full object.
+func useCompleteFieldTypeDiscriminator(sum *ir.Type) bool {
+	names := make([]string, 0, len(sum.SumSpec.UniqueFields))
+	for name := range sum.SumSpec.UniqueFields {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+nextField:
+	for _, name := range names {
+		variants := sum.SumSpec.UniqueFields[name]
+		if len(variants) != len(sum.SumOf) {
+			continue
+		}
+		seenTypes := make(map[string]bool)
+		seenVariants := make(map[string]bool)
+		defaultMapping := ""
+		for _, variant := range variants {
+			if variant.FieldType == "" || seenVariants[variant.VariantName] {
+				continue nextField
+			}
+			seenVariants[variant.VariantName] = true
+			types := []string{variant.FieldType}
+			if variant.Nullable && variant.FieldType != "jx.Null" {
+				types = append(types, "jx.Null")
+			}
+			for _, typ := range types {
+				if seenTypes[typ] {
+					continue nextField
+				}
+				seenTypes[typ] = true
+			}
+			found := false
+			for _, typ := range sum.SumOf {
+				if typ.Name != variant.VariantName {
+					continue
+				}
+				for _, field := range typ.JSON().Fields() {
+					if field.Tag.JSON != name {
+						continue
+					}
+					if field.Spec == nil {
+						continue nextField
+					}
+					found = true
+					if !field.Spec.Required {
+						if defaultMapping != "" {
+							continue nextField
+						}
+						defaultMapping = typ.Name
+					}
+					break
+				}
+				break
+			}
+			if !found {
+				continue nextField
+			}
+		}
+
+		selected := slices.Clone(variants)
+		for idx := range selected {
+			if selected[idx].FieldType == "jx.Null" {
+				// A pure-null field already emits the null case in the decoder.
+				selected[idx].Nullable = false
+			}
+		}
+		sum.SumSpec.UniqueFields = map[string][]ir.UniqueFieldVariant{name: selected}
+		sum.SumSpec.DefaultMapping = defaultMapping
+		return true
+	}
+	return false
 }
 
 func (g *schemaGen) allOf(name string, schema *jsonschema.Schema) (*ir.Type, error) {

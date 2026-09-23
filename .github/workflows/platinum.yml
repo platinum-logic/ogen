@@ -1,0 +1,42 @@
+name: Platinum ogen
+
+on:
+  push:
+    branches: [platinum-v1.24]
+    tags: ['v*-platinum.*']
+  workflow_dispatch:
+
+# Keep this public dependency fork isolated from organization runners and secrets.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.repository == 'platinum-logic/ogen'
+    name: ${{ matrix.lane }}
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/library/golang:1.27.1
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [generation, test, vet]
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check generated fixtures
+        if: matrix.lane == 'generation'
+        run: |
+          go generate ./...
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Run the complete module with the race detector
+        if: matrix.lane == 'test'
+        run: go test -race -count=1 -timeout=15m ./...
+      - name: Vet the complete module
+        if: matrix.lane == 'vet'
+        run: go vet ./...

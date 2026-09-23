@@ -186,8 +186,23 @@ func loadExternal(pkgPath, typeName string) (pkgName string, encode, decode Exte
 		return nil
 	}
 
-	getIface := func(pkgs []*packages.Package, pkgPath, typeName string) *types.Interface {
-		return getType(pkgs, pkgPath, typeName).Underlying().(*types.Interface).Complete()
+	getIface := func(pkgs []*packages.Package, pkgPath, typeName string) (*types.Interface, error) {
+		for _, pkg := range pkgs {
+			if pkg.Types == nil || pkg.Types.Path() != pkgPath {
+				continue
+			}
+			obj := pkg.Types.Scope().Lookup(typeName)
+			if obj == nil {
+				break
+			}
+			// Underlying also resolves interface aliases, including the Go 1.27
+			// encoding/json interfaces. Such aliases are not *types.Named.
+			if iface, ok := obj.Type().Underlying().(*types.Interface); ok {
+				return iface.Complete(), nil
+			}
+			break
+		}
+		return nil, errors.Errorf("interface %s.%s not found", pkgPath, typeName)
 	}
 
 	typ := getType(pkgs, pkgPath, typeName)
@@ -197,13 +212,19 @@ func loadExternal(pkgPath, typeName string) (pkgName string, encode, decode Exte
 	ptr := types.NewPointer(typ)
 
 	for name, kind := range encoders {
-		iface := getIface(pkgs, name[0], name[1])
+		iface, err := getIface(pkgs, name[0], name[1])
+		if err != nil {
+			return "", -1, -1, err
+		}
 		if types.Implements(typ, iface) || types.Implements(ptr, iface) {
 			encode |= kind
 		}
 	}
 	for name, kind := range decoders {
-		iface := getIface(pkgs, name[0], name[1])
+		iface, err := getIface(pkgs, name[0], name[1])
+		if err != nil {
+			return "", -1, -1, err
+		}
 		if types.Implements(typ, iface) || types.Implements(ptr, iface) {
 			decode |= kind
 		}

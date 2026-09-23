@@ -184,6 +184,25 @@ func (s *{{ $.Name }}) Decode(d *jx.Decoder) error {
 			{{ end -}}
 
 			if err := func() error {
+				{{- $const := $f.Const }}
+				{{- if $const.Set }}
+				if err := d.Capture(func(d *jx.Decoder) error {
+					value, err := d.Raw()
+					if err != nil {
+						return err
+					}
+					equal, err := json.Equal(value, []byte({{ quote (default_json $const.Value) }}))
+					if err != nil {
+						return err
+					}
+					if !equal {
+						return errors.New("unexpected constant value")
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+				{{- end }}
 				{{- template "json/dec" field_elem $f }}
 				return nil
 			}(); err != nil {

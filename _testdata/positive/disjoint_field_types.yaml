@@ -1,0 +1,47 @@
+openapi: 3.1.0
+info:
+  title: Disjoint field types with overlapping enums
+  version: 1.0.0
+paths:
+  /reference:
+    get:
+      operationId: getReference
+      responses:
+        '200':
+          description: A reference with optional or required metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reference'
+components:
+  schemas:
+    Reference:
+      oneOf:
+        - $ref: '#/components/schemas/OrdinaryReference'
+        - $ref: '#/components/schemas/ReviewedReference'
+    OrdinaryReference:
+      type: object
+      additionalProperties: false
+      required: [record_type]
+      properties:
+        record_type:
+          type: string
+          enum: [draft, template]
+        review:
+          type: 'null'
+    ReviewedReference:
+      type: object
+      additionalProperties: false
+      required: [record_type, review]
+      properties:
+        record_type:
+          type: string
+          const: draft
+        review:
+          type: object
+          additionalProperties: false
+          required: [kind]
+          properties:
+            kind:
+              type: string
+              const: review
